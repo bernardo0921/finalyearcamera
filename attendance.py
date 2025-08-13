@@ -17,11 +17,44 @@ import serial
 import time
 import struct
 from PIL import Image
-import board
-import busio
-import adafruit_fingerprint
 from datetime import datetime
 import os
+
+try:
+    import board
+    import busio
+    import adafruit_fingerprint
+    CIRCUITPYTHON_AVAILABLE = True
+except ImportError:
+    CIRCUITPYTHON_AVAILABLE = False
+    print("⚠️  CircuitPython libraries not available, using alternative serial method")
+
+class AS608Serial:
+    """Basic AS608 serial communication class for when CircuitPython isn't available"""
+    
+    def __init__(self, uart):
+        self.uart = uart
+        self.image_buffer = []
+    
+    def verify_password(self):
+        """Verify sensor connection"""
+        try:
+            # Send a basic command to test connection
+            self.uart.write(b'\xEF\x01\xFF\xFF\xFF\xFF\x01\x00\x07\x13\x00\x00\x00\x00\x00\x1B')
+            response = self.uart.read(12)
+            return len(response) > 0
+        except:
+            return False
+    
+    def get_image(self):
+        """Simplified image capture"""
+        try:
+            # Send get image command
+            self.uart.write(b'\xEF\x01\xFF\xFF\xFF\xFF\x01\x00\x03\x01\x05')
+            response = self.uart.read(12)
+            return 0 if len(response) > 0 else -1
+        except:
+            return -1
 
 class AS608FingerprintScanner:
     def __init__(self, uart_port='/dev/ttyS0', baud_rate=57600):
@@ -40,17 +73,27 @@ class AS608FingerprintScanner:
     def setup_uart(self):
         """Setup UART communication with the fingerprint sensor"""
         try:
-            # Setup serial connection
-            uart = busio.UART(board.TX, board.RX, baudrate=self.baud_rate)
-            self.finger = adafruit_fingerprint.Adafruit_Fingerprint(uart)
+            if CIRCUITPYTHON_AVAILABLE:
+                # Use CircuitPython method
+                uart = busio.UART(board.TX, board.RX, baudrate=self.baud_rate)
+                self.finger = adafruit_fingerprint.Adafruit_Fingerprint(uart)
+            else:
+                # Use standard pyserial method
+                uart = serial.Serial(self.uart_port, self.baud_rate, timeout=1)
+                self.serial = uart
+                self.finger = AS608Serial(uart)
             
             # Test connection
-            if self.finger.verify_password():
-                print("✅ AS608 Fingerprint sensor connected successfully!")
-                print(f"📊 Sensor info: {self.finger.read_sysparam()}")
+            if hasattr(self.finger, 'verify_password'):
+                if self.finger.verify_password():
+                    print("✅ AS608 Fingerprint sensor connected successfully!")
+                    if hasattr(self.finger, 'read_sysparam'):
+                        print(f"📊 Sensor info: {self.finger.read_sysparam()}")
+                else:
+                    print("❌ Failed to connect to fingerprint sensor")
+                    return False
             else:
-                print("❌ Failed to connect to fingerprint sensor")
-                return False
+                print("✅ Serial connection established to AS608 sensor")
                 
         except Exception as e:
             print(f"❌ UART setup failed: {e}")
@@ -58,6 +101,7 @@ class AS608FingerprintScanner:
             print("1. Check wiring connections")
             print("2. Enable serial interface: sudo raspi-config -> Interface Options -> Serial")
             print("3. Disable serial console but enable serial port hardware")
+            print("4. Install CircuitPython: pip3 install adafruit-blinka")
             return False
             
         return True
