@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raspberry Pi Camera Stream</title>
+    <!-- Use Tailwind CSS for a clean, responsive design -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for a better look */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+            height: 0;
+            overflow: hidden;
+            background-color: #000;
+        }
+        .video-container canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="max-w-4xl w-full bg-gray-800 rounded-2xl shadow-lg p-6 space-y-6">
+        
+        <header class="text-center">
+            <h1 class="text-3xl font-bold">Live Camera Stream</h1>
+            <p class="text-gray-400 mt-2">View the stream and capture a photo on demand.</p>
+        </header>
+
+        <!-- Video Stream and Live Preview -->
+        <div class="video-container rounded-xl overflow-hidden shadow-xl border-4 border-gray-700">
+            <!-- This canvas will display the live stream from the camera -->
+            <canvas id="videoFeed" class="w-full h-full"></canvas>
+            <!-- A placeholder for the live stream, which would be replaced by actual data -->
+            <div id="loading" class="absolute inset-0 flex items-center justify-center bg-gray-900/70">
+                <p class="text-xl animate-pulse">Waiting for live stream...</p>
+            </div>
+        </div>
+
+        <!-- Status Message Area -->
+        <div id="statusMessage" class="text-center p-3 rounded-lg text-sm bg-gray-700 text-gray-300">
+            Status: Ready to connect to the camera server.
+        </div>
+
+        <!-- Controls and Captured Image Display -->
+        <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+
+            <!-- Control Button -->
+            <div class="flex-1 w-full md:w-auto">
+                <button id="captureButton"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition duration-300 transform hover:scale-105 shadow-lg">
+                    Capture Photo
+                </button>
+            </div>
+            
+            <!-- Display for the Captured Image -->
+            <div class="flex-1 w-full md:w-auto relative group">
+                <img id="capturedImage" src="https://placehold.co/600x338/1f2937/d1d5db?text=Captured+Image+Here"
+                     alt="Captured Photo"
+                     class="w-full h-auto rounded-xl shadow-xl border-4 border-gray-700 transition-opacity duration-300 opacity-100 group-hover:opacity-75">
+                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <p class="text-xl font-bold text-white bg-black/50 p-2 rounded">Captured Image</p>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        // DOM elements
+        const videoCanvas = document.getElementById('videoFeed');
+        const context = videoCanvas.getContext('2d');
+        const captureButton = document.getElementById('captureButton');
+        const capturedImage = document.getElementById('capturedImage');
+        const statusMessage = document.getElementById('statusMessage');
+        const loadingOverlay = document.getElementById('loading');
+
+        // Function to update the video canvas with a new frame
+        function updateVideoFrame(imageData) {
+            const img = new Image();
+            img.onload = () => {
+                // Ensure the canvas dimensions match the image to avoid distortion
+                videoCanvas.width = img.width;
+                videoCanvas.height = img.height;
+                context.drawImage(img, 0, 0, videoCanvas.width, videoCanvas.height);
+            };
+            img.src = imageData;
+            loadingOverlay.style.display = 'none';
+        }
+
+        // Simulating a live stream using a WebSocket
+        // In a real application, you would connect to a Python server on your Pi
+        // The server would capture frames with picamera2 and send them over the WebSocket
+        // Example server-side code (for Flask-SocketIO):
+        // from flask import Flask, render_template
+        // from flask_socketio import SocketIO
+        // from picamera2 import Picamera2
+        //
+        // app = Flask(__name__)
+        // socketio = SocketIO(app)
+        // picam2 = Picamera2()
+        //
+        // def stream_frames():
+        //     picam2.start()
+        //     while True:
+        //         frame = picam2.capture_array()
+        //         # Convert frame to JPEG
+        //         # Send JPEG data over WebSocket
+        //         time.sleep(0.1)
+        //
+        // if __name__ == '__main__':
+        //     # The server would run here
+        //     socketio.start_background_task(stream_frames)
+        //     socketio.run(app, host='0.0.0.0')
+
+        // Mock WebSocket to simulate the stream
+        const mockWebSocket = {
+            onmessage: null,
+            send: (message) => {
+                console.log("Mock WebSocket received message:", message);
+                if (message === 'capture') {
+                    // Simulate a captured image response
+                    const placeholderUrl = `https://placehold.co/600x338/47a847/ffffff?text=Captured+on+Demand`;
+                    capturedImage.src = placeholderUrl;
+                    statusMessage.textContent = 'Status: Photo captured successfully!';
+                }
+            },
+            close: () => console.log("Mock WebSocket closed."),
+        };
+
+        // Simulated stream frames
+        let frameCount = 0;
+        setInterval(() => {
+            frameCount = (frameCount % 4) + 1; // Cycle through 4 mock images
+            const imageUrl = `https://placehold.co/600x338/1f2937/d1d5db?text=Live+Stream+-+Frame+${frameCount}`;
+            updateVideoFrame(imageUrl);
+        }, 1000); // Update the mock stream every second
+
+        // Event listener for the capture button
+        captureButton.addEventListener('click', () => {
+            statusMessage.textContent = 'Status: Sending capture command...';
+            // In a real application, you would send a command to your server
+            mockWebSocket.send('capture');
+        });
+
+        // Initialize status message
+        statusMessage.textContent = 'Status: Live stream simulation started.';
+
+    </script>
+</body>
+</html>
